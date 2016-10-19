@@ -38,7 +38,7 @@ CREATE TABLE {$wpdb->bop_bookingmeta} (
   meta_key varchar(255) default NULL,
   meta_value longtext,
   PRIMARY KEY  (meta_id),
-  KEY bop_booking_id (booking_id),
+  KEY bop_booking_id (bop_booking_id),
   KEY meta_key (meta_key($max_index_length))
 ) $charset_collate;";
 

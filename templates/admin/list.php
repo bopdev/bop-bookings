@@ -8,8 +8,8 @@ $rows = $wpdb->get_results(
   INNER JOIN {$wpdb->bop_bookings_dates} AS d ON (d.booking_id = t.booking_id)
   WHERE CAST(d.start AS DATETIME) >= CAST(NOW() AS DATETIME)
   AND t.status IN ('pending', 'approved')
-  AND t.type IN ('schools_groups', 'private_hire')
-  ORDER BY type, status, id",
+  GROUP BY t.booking_id
+  ORDER BY type DESC, status DESC, id DESC",
   ARRAY_A
 );
 
@@ -23,32 +23,16 @@ foreach( $rows as $row ){
     <option value="<?php echo $code ?>"<?php echo $_bb->get_default_type() == $code ? ' selected' : '' ?>><?php echo $def['labels']['general'] ?></option>
   <?php endforeach ?>
 </select>
-<div class="clndr-container">
-</div>
+<style>.status-approved{background:red;} .status-pending{background:yellow;} .header-day, .day{float:left;width:14%;height:40px;} .day-selected{background:green;} .clearfix{clear:both;}</style>
+<div class="clndr-container"></div>
+<div class="clearfix"></div>
 <div class="bookings-list">
   <ul></ul>
 </div>
 <script type="application/json" id="booking-data"><?php echo json_encode( $collection ) ?></script>
-<script type="text/template" id="clndr-booking-template">
+<script type="text/template" id="clndr-template">
+  <?php include apply_filters( 'admin_list_clndr_template.bop_bookings', bop_bookings_plugin_path( 'templates/admin/list-clndr.php' ) ) ?>
 </script>
 <script type="text/template" id="booking-list-item-template">
-  <li class="booking-list-item">
-    <form method="post" action="#">
-      <div>
-        <div class="details">
-          <span class="name"><%= meta.name %></span>
-          <span class="email"><%= meta.email %></span>
-        </div>
-        <div class="actions">
-          <input type="hidden" name="booking_id" value="<%= id %>">
-          <select name="status">
-            <% _.each(valid_statuses, function(valid_status, code){ %>
-              <option value="<%= code %>"<%= valid_status == status ? ' selected' : '' %>><%= valid_status.labels.action %></option>
-            <% }); %>
-          </select>
-          <button type="submit" name="action" value="change_status"><?php _e( 'Update', 'bop-bookings' ) ?></button>
-        </div>
-      </div>
-    </form>
-  </li>
+  <?php include apply_filters( 'admin_list_item_template.bop_bookings', bop_bookings_plugin_path( 'templates/admin/list-item.php' ) ) ?>
 </script>

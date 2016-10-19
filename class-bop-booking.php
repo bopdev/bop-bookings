@@ -3,7 +3,7 @@
 //Reject if accessed directly
 defined( 'ABSPATH' ) || die( 'Our survey says: ... X.' );
 
-class Bop_Booking{
+class Bop_Booking implements JsonSerializable{
   
   public $id = 0;
   
@@ -22,7 +22,7 @@ class Bop_Booking{
       if( is_array( $id_or_data ) || is_object( $id_or_data ) ){
         $this->fill_object( (array)$id_or_data );
       }else{
-        $this->load( $id );
+        $this->load( $id_or_data );
       }
     }
     return $this;
@@ -48,11 +48,11 @@ class Bop_Booking{
     }
     
     if( isset( $data['type'] ) ){
-      $this->type = in_array( $data['type'], array_keys( $this->get_valid_types() ) ? $data['type'] : $this->get_default_type();
+      $this->type = in_array( $data['type'], array_keys( $this->get_valid_types() ) ) ? $data['type'] : $this->get_default_type();
     }
     
     if( isset( $data['status'] ) ){
-      $this->status = in_array( $data['status'], array_keys( $this->get_valid_statuses() ) ? $data['status'] : $this->get_default_status();
+      $this->status = in_array( $data['status'], array_keys( $this->get_valid_statuses() ) ) ? $data['status'] : $this->get_default_status();
     }
     
     if( isset( $data['dates'] ) ){
@@ -104,13 +104,22 @@ class Bop_Booking{
       'valid_statuses.bop_bookings',
       [
         'pending'=>[
-          'labels'=>['action'=>__( 'Pending', 'bop-bookings' )]
+          'labels'=>[
+            'general'=>__( 'Pending', 'bop-bookings' ),
+            'action'=>__( 'Pending', 'bop-bookings' )
+          ]
         ],
         'approved'=>[
-          'labels'=>['action'=>__( 'Approve', 'bop-bookings' )]
+          'labels'=>[
+            'general'=>__( 'Approved', 'bop-bookings' ),
+            'action'=>__( 'Approve', 'bop-bookings' )
+          ]
         ],
         'dismissed'=>[
-          'labels'=>['action'=>__( 'Dismiss', 'bop-bookings' )]
+          'labels'=>[
+            'general'=>__( 'Dismissed', 'bop-bookings' ),
+            'action'=>__( 'Dismiss', 'bop-bookings' )
+          ]
         ]
       ],
       $this
@@ -178,6 +187,8 @@ class Bop_Booking{
   }
   
   public function get_dates(){
+    global $wpdb;
+    
     if( $this->dates )
       return $this->dates;
     
@@ -185,7 +196,8 @@ class Bop_Booking{
       $wpdb->prepare(
         "SELECT start
         FROM {$wpdb->bop_bookings_dates} AS t
-        WHERE booking_id = %d",
+        WHERE booking_id = %d
+        ORDER BY start ASC",
         $this->id
       )
     );
@@ -199,19 +211,32 @@ class Bop_Booking{
     global $wpdb;
     
     if( $this->id && in_array( $status, array_keys( $this->get_valid_statuses() ) ) ){
+      
+      do_action( 'before_update_status.bop_bookings', $status, $this );
+      
       $success = $wpdb->update( $wpdb->bop_bookings, ['status'=>$status], ['booking_id'=>$this->id], ['%s'], ['%d'] );
       if( $success ){
         $this->fill_object( ['status'=>$status] );
+        do_action( 'after_update_status.bop_bookings', $this );
       }
     }
   }
   
-  public function update_dates( $dates ){
+  public function update_dates( $dates = [] ){
     global $wpdb;
     
-    $new_dates = new Bop_Booking()->fill_object(['dates'=>$dates])->get_dates();
+    if( $dates ){
+      $new_dates = new Bop_Booking();
+      $new_dates = $new_dates->fill_object(['dates'=>$dates])->get_dates();
+      $old_dates = $this->get_dates();
+    }else{
+      $new_dates = $this->get_dates();
+      $old_dates = new Bop_Booking( $this->id );
+      $old_dates = $old_dates->get_dates();
+    }
     
-    $old_dates = $this->get_dates();
+    do_action( 'before_update_dates.bop_bookings', $new_dates, $old_dates, $this );
+    
     $diff = count( $new_dates ) - count( $old_dates );
     
     if( $diff < 0 ){
@@ -237,10 +262,16 @@ class Bop_Booking{
     }
     
     $this->get_dates();
+    
+    do_action( 'after_update_dates.bop_bookings', $this );
+    
+    return $this;
   }
   
   public function insert(){
     global $wpdb;
+    
+    do_action( 'before_insert.bop_bookings', $this );
     
     $wpdb->query( $wpdb->prepare(
       "INSERT INTO {$wpdb->bop_bookings} 
@@ -251,24 +282,28 @@ class Bop_Booking{
       $this->status
     ) );
     
-    $id = $wpdb->insert_id;
+    $this->id = $id = $wpdb->insert_id;
     
-    $date_rows = [];
-    $date_rows_format = [];
-    foreach( $this->dates as $date ){
-      $date_rows[] = $id;
-      $date_rows[] = $date->format("Y-m-d H:i:s");
-      $date_rows_format[] = "(%d, %s),\n";
-    }
+    do_action( 'after_insert.bop_bookings', $this );
     
-    $wpdb->query( $wpdb->prepare(
-      "INSERT INTO {$wpdb->bop_bookings_dates} 
-        (booking_id, start)
-        VALUES {$date_rows_format}
-      ",
-      $date_rows
-    ) );
+    $this->update_dates();
     
-    return $this->load( $id );
+    do_action( 'after_insert_dates.bop_bookings', $this );
+    
+    return $this;
+  }
+  
+  public function jsonSerialize(){
+    $output = new StdClass();
+    $output->id = $this->id;
+    $output->dates = $this->get_dates();
+    $output->type = $this->type;
+    $output->status = $this->status;
+    $output->valid_statuses = $this->get_valid_statuses();
+    $output->meta = $this->get_meta();
+    
+    $output = apply_filters( 'json_serialize.bop_bookings', $output, $this );
+    
+    return $output;
   }
 }
