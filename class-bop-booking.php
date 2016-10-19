@@ -210,7 +210,7 @@ class Bop_Booking implements JsonSerializable{
   public function update_status( $status ){
     global $wpdb;
     
-    if( $this->id && in_array( $status, array_keys( $this->get_valid_statuses() ) ) ){
+    if( $this->id && in_array( $status, array_keys( $this->get_valid_statuses() ) ) && $this->status != $status ){
       
       do_action( 'before_update_status.bop_bookings', $status, $this );
       
