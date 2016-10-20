@@ -46,6 +46,6 @@ add_action( 'admin_enqueue_scripts', function( $hook ){
   }
 } );
 
-add_action( 'wp_enqueue_scripts', '_bop_bookings_register_scripts' );
+add_action( 'wp_enqueue_scripts', '_bop_bookings_register_scripts', 1 );
 
 require_once bop_bookings_plugin_path( 'cf-bespoke.php' );
